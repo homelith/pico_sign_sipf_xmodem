@@ -59,9 +59,10 @@
 #define SIPF_LINEBUF_SIZE 256
 #define SIPF_FILENAME_MAX 64
 
-#define ST_RX_POLLING      0
-#define ST_XMODEM_REQ_WAIT 1
-#define ST_XMODEM_RECV     2
+#define ST_IDLE            0
+#define ST_RX_POLLING      1
+#define ST_XMODEM_REQ_WAIT 2
+#define ST_XMODEM_RECV     3
 
 #define EOT 0x04
 #define NAK 0x15
@@ -169,18 +170,19 @@ int main() {
 	uint64_t sw_prev_tick = 0;
 
 	// sipf controls
-	uint8_t  sipf_state = ST_RX_POLLING;
+	uint8_t  sipf_state = ST_IDLE;
+	uint64_t sipf_state_last_event_tick = time_us_64();
 	uint8_t  sipf_filename[SIPF_FILENAME_MAX];
 	uint16_t sipf_filename_len = 0;
 
 	uint64_t sipf_rxpoll_prev_tick = time_us_64();
-	uint8_t  sipf_rxpoll_line_cnt = 0;
-	uint8_t  sipf_rxpoll_linebuf[SIPF_LINEBUF_SIZE];
-	uint16_t sipf_rxpoll_linebuf_idx = 0;
-	uint8_t  sipf_rxpoll_linebuf_accept_newline = 0;
-	bool     sipf_rxpoll_filename_available = false;
 
-	uint64_t sipf_xmodem_last_event_tick = 0;
+	uint8_t  sipf_rxpoll_line_cnt;
+	uint8_t  sipf_rxpoll_linebuf[SIPF_LINEBUF_SIZE];
+	uint16_t sipf_rxpoll_linebuf_idx;
+	uint8_t  sipf_rxpoll_linebuf_accept_newline;
+	bool     sipf_rxpoll_filename_available;
+
 	uint64_t sipf_xmodem_trigger_tick = 0xffffffffffffffffULL;
 	uint16_t sipf_xmodem_block_cnt = 0;
 	uint16_t sipf_xmodem_byte_cnt = 0;
@@ -220,12 +222,12 @@ int main() {
 	multicore_launch_core1(core1_main);
 
 	// wait for SCM-LTEM1NRF-B booting up
-	for (uint8_t i = 0; i < 10; i ++) {
-		gpio_put(25, true);
-		sleep_ms(1000);
-		gpio_put(25, false);
-		sleep_ms(1000);
-	}
+	//for (uint8_t i = 0; i < 10; i ++) {
+	//	gpio_put(25, true);
+	//	sleep_ms(1000);
+	//	gpio_put(25, false);
+	//	sleep_ms(1000);
+	//}
 
 	// indicate init completed
 	for (uint8_t i = 0; i < 3; i ++) {
@@ -284,7 +286,36 @@ int main() {
 		//--------------------------------------------------------------
 		// control sipf-std-client via uart1
 		//--------------------------------------------------------------
-		if (sipf_state == ST_RX_POLLING) {
+		// reset state after 30sec no activity
+		if (curr_tick - sipf_state_last_event_tick > 30000000) {
+			queue_puts(&uart0_tx_queue, (uint8_t*)"'\r\n", 256, true);
+			queue_puts(&uart0_tx_queue, (uint8_t*)"timed out, return to initial state.\r\n", 256, true);
+			gpio_put(25, false);
+			sipf_rxpoll_prev_tick = curr_tick;
+			sipf_state_last_event_tick = curr_tick;
+			sipf_state = ST_IDLE;
+		}
+
+		if (sipf_state == ST_IDLE) {
+			// drain unused input
+			while (uart_is_readable(uart1)) {
+				uart_getc(uart1);
+			}
+			// issue "$$RX" command after 180sec or rising edge of switch pressed
+			// then move to ST_RX_POLLING state
+			if (curr_tick - sipf_rxpoll_prev_tick > 180000000 || sw_rise) {
+				queue_puts(&uart0_tx_queue, (uint8_t*)"send $$RX command to sipf\r\n", 256, true);
+				queue_puts(&uart1_tx_queue, (uint8_t*)"$$RX\r\n", 256, true);
+				gpio_put(25, true);
+				sipf_rxpoll_line_cnt = 0;
+				sipf_rxpoll_linebuf_idx = 0;
+				sipf_rxpoll_linebuf_accept_newline = 0;
+				sipf_rxpoll_filename_available = false;
+				sipf_state = ST_RX_POLLING;
+			}
+			// supress resetting during IDLE state
+			sipf_state_last_event_tick = curr_tick;
+		} else if (sipf_state == ST_RX_POLLING) {
 			// $$RX command and response example
 			//
 			// ```
@@ -297,14 +328,6 @@ int main() {
 			// 25 20 04 484F4745
 			// OK
 			// ```
-
-			// issue "$$RX" command every 60sec or rising edge of switch pressed
-			if (sipf_rxpoll_line_cnt == 0 && (curr_tick - sipf_rxpoll_prev_tick > 180000000 || sw_rise)) {
-				sipf_rxpoll_prev_tick = curr_tick;
-				queue_puts(&uart0_tx_queue, (uint8_t*)"send $$RX command to sipf\r\n", 256, true);
-				queue_puts(&uart1_tx_queue, (uint8_t*)"$$RX\r\n", 256, true);
-				gpio_put(25, true);
-			}
 
 			// read from uart1 in per-line parsing mode
 			while (uart_is_readable(uart1)) {
@@ -330,17 +353,18 @@ int main() {
 							queue_puts(&uart1_tx_queue, sipf_filename, sipf_filename_len, false);
 							queue_puts(&uart1_tx_queue, (uint8_t*)"\r\n", 256, true);
 							// state transition
-							sipf_rxpoll_filename_available = false;
 							sipf_xmodem_trigger_tick = curr_tick + 2000000;
 							sipf_state = ST_XMODEM_REQ_WAIT;
 						} else {
-							// go to idle
+							// if no $$FGET filename available, go to idle
 							if (sipf_rxpoll_line_cnt == 1) {
 								queue_puts(&uart0_tx_queue, (uint8_t*)"got response with no message\r\n", 256, true);
 							} else {
 								queue_puts(&uart0_tx_queue, (uint8_t*)"got response with invalid message\r\n", 256, true);
 							}
 							gpio_put(25, false);
+							sipf_rxpoll_prev_tick = curr_tick;
+							sipf_state = ST_IDLE;
 						}
 						sipf_rxpoll_line_cnt = 0;
 					} else if (sipf_rxpoll_line_cnt == 6) {
@@ -367,6 +391,7 @@ int main() {
 					} else {
 						sipf_rxpoll_line_cnt ++;
 					}
+					sipf_rxpoll_linebuf_accept_newline = 0;
 					sipf_rxpoll_linebuf_idx = 0;
 				} else if (sipf_rxpoll_linebuf_accept_newline == 0 && c == '\r') {
 					sipf_rxpoll_linebuf_accept_newline = 1;
@@ -375,13 +400,20 @@ int main() {
 					sipf_rxpoll_linebuf_accept_newline = 0;
 					sipf_rxpoll_linebuf_idx = (sipf_rxpoll_linebuf_idx != SIPF_LINEBUF_SIZE-2) ? sipf_rxpoll_linebuf_idx + 1 : sipf_rxpoll_linebuf_idx;
 				}
+				sipf_state_last_event_tick = curr_tick;
 			}
 		} else if (sipf_state == ST_XMODEM_REQ_WAIT) {
 			// wait 2 sec until transition to next state
 			if (curr_tick > sipf_xmodem_trigger_tick) {
-				sipf_xmodem_last_event_tick = curr_tick;
-				sipf_xmodem_trigger_tick = curr_tick + 2000000;
+				queue_puts(&uart0_tx_queue, (uint8_t*)"send NAK to start xmodem recv\r\n", 256, true);
+				queue_push(&uart1_tx_queue, NAK);
+
+				sipf_xmodem_trigger_tick = 0xffffffffffffffffULL;
+				sipf_xmodem_block_cnt = 0;
+				sipf_xmodem_byte_cnt = 0;
 				dvi_update_idx = 0;
+
+				sipf_state_last_event_tick = curr_tick;
 				sipf_state = ST_XMODEM_RECV;
 			}
 			while (uart_is_readable(uart1)) {
@@ -389,32 +421,17 @@ int main() {
 				uart_getc(uart1);
 			}
 		} else if (sipf_state == ST_XMODEM_RECV) {
-			// 30sec timeout to return initial state
-			if (curr_tick - sipf_xmodem_last_event_tick > 30000000) {
-				queue_puts(&uart0_tx_queue, (uint8_t*)"xmodem timed out\r\n", 256, true);
-				sipf_state = ST_RX_POLLING;
-				sipf_xmodem_byte_cnt = 0;
-				sipf_xmodem_block_cnt = 0;
-				sipf_rxpoll_prev_tick = curr_tick;
-				gpio_put(25, false);
-			}
-
-			// issue ACK command at trigger time
+			// issue ACK command after 1 block received
 			if (curr_tick > sipf_xmodem_trigger_tick) {
+				queue_push(&uart0_tx_queue, '.');
+				queue_push(&uart1_tx_queue, ACK);
 				sipf_xmodem_trigger_tick = 0xffffffffffffffffULL;
-				if (sipf_xmodem_block_cnt == 0) {
-					queue_puts(&uart0_tx_queue, (uint8_t*)"send NAK to start xmodem recv\r\n", 256, true);
-					queue_push(&uart1_tx_queue, NAK);
-				} else {
-					queue_push(&uart0_tx_queue, '.');
-					queue_push(&uart1_tx_queue, ACK);
-				}
-				sipf_xmodem_last_event_tick = curr_tick;
+				sipf_state_last_event_tick = curr_tick;
 			}
 
+			// read from xmodem enabled uart1 and store rgb565 data into pixel buffer
 			while (uart_is_readable(uart1)) {
 				uint8_t c = (uint8_t)uart_getc(uart1);
-
 				// dump received byte to uart0
 				//queue_push(&uart0_tx_queue, hex2char((c & 0xf0) >> 4));
 				//queue_push(&uart0_tx_queue, hex2char(c & 0x0f));
@@ -425,14 +442,14 @@ int main() {
 
 				if (sipf_xmodem_byte_cnt == 0 && c == EOT) {
 					// received EOT and return to initial state
+					queue_puts(&uart0_tx_queue, (uint8_t*)"\r\n", 256, true);
 					queue_puts(&uart0_tx_queue, (uint8_t*)"EOT received\r\n", 256, true);
-					sipf_state = ST_RX_POLLING;
-					sipf_xmodem_byte_cnt = 0;
-					sipf_xmodem_block_cnt = 0;
-					sipf_rxpoll_prev_tick = curr_tick;
 					queue_puts(&uart0_tx_queue, (uint8_t*)"send ACK to finish xmodem recv\r\n", 256, true);
 					queue_push(&uart1_tx_queue, ACK);
 					gpio_put(25, false);
+
+					sipf_rxpoll_prev_tick = curr_tick;
+					sipf_state = ST_IDLE;
 				} else if (3 <= sipf_xmodem_byte_cnt && sipf_xmodem_byte_cnt < 131) {
 					if (dvi_update_idx < 153600) {
 						testcard_60x1280[dvi_update_idx] = c;
@@ -447,7 +464,7 @@ int main() {
 				} else {
 					sipf_xmodem_byte_cnt ++;
 				}
-				sipf_xmodem_last_event_tick = curr_tick;
+				sipf_state_last_event_tick = curr_tick;
 			}
 		}
 	
