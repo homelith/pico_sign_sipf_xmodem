@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<h3>プリセットから選ぶ</h3>
+<p>プリセットから画像を選びボタンを押すとアップロードされます。</p>
+<p>アップロード後、本体の更新ボタンを押すか、数分待つと更新されます。</p>
+<form action="{% url 'preset' %}" method="post">
+  {% csrf_token %}
+  <fieldset>
+    <p><label><input type="radio" name="bin_name" value="panoroman_754_img_1803.bin">パノラマ画像１</label></p>
+    <p><label><input type="radio" name="bin_name" value="panoroman_72_img_0485.bin">パノラマ画像２</label></p>
+    <p><label><input type="radio" name="bin_name" value="testcard_60x1280.bin">画面テスト画像</label></p>
+  </fieldset>
+  <p><input type="submit" value="送信"><input type="reset" value="リセット"></p>
+</form>
+<hr>
+<h3>カスタム画像をアップロードする</h3>
+<p>下記フォームから1280x60サイズのPNGファイルを指定してアップロードできます。</p>
+<p>アップロード後、本体の更新ボタンを押すか、数分待つと更新されます。</p>
+<br>
+{% endblock content %}
+{% block javascript %}
+{% endblock javascript %}
