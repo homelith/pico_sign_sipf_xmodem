@@ -4,9 +4,14 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-django = "*"
+django = "<4.1"
+django-tidb = "==2.1.1"
+mysqlclient = "*"
+requests = "*"
+pillow = "*"
+numpy = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.9"
+python_version = "3.10"

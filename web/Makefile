@@ -1,12 +1,19 @@
-.PHONY: default init run
+.PHONY: default pipenv initdb run docker
 
 default : run
 
-init :
+pipenv :
 	DISPLAY= PIPENV_VENV_IN_PROJECT=1 pipenv install
-	DISPLAY= pipenv run python3 gen_secret_key.py > signboard/secret_key.py
+
+initdb :
+	DISPLAY= pipenv run python3 gen_settings_extra.py > pico_sign_web/settings_extra.py
 	DISPLAY= pipenv run python3 manage.py migrate
 	DISPLAY= pipenv run python3 manage.py createsuperuser
 
 run :
-	DISPLAY= pipenv run python3 manage.py runserver 8080
+	DISPLAY= pipenv run python3 manage.py runserver 0.0.0.0:8080
+
+docker :
+	docker build -t pico_sign_web:latest .
+
+

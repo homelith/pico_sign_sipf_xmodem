@@ -1,4 +1,4 @@
-"""signboard URL Configuration
+"""pico_sign_web URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/4.0/topics/http/urls/
@@ -15,8 +15,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from signboard import views
 from django.contrib.auth import views as auth_views
+from pico_sign_web import views
 
 urlpatterns = [
     path('', views.index, name='index'),

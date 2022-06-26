@@ -4,7 +4,7 @@
 ```
 PIPENV_VENV_IN_PROJECT=1 pipenv install
 pipenv run python3 manage.py migrate
-pipenv run python3 gen_secret_key.py > signboard/secret_key.py
+pipenv run python3 gen_secret_key.py > pico_sign_web/secret_key.py
 pipenv run python3 manage.py createsuperuser
 pipenv run python3 manage.py runserver
 ```

@@ -1,14 +1,15 @@
 {% extends 'base.html' %}
 {% block content %}
+{% load static %}
 <h3>プリセットから選ぶ</h3>
 <p>プリセットから画像を選びボタンを押すとアップロードされます。</p>
 <p>アップロード後、本体の更新ボタンを押すか、数分待つと更新されます。</p>
 <form action="{% url 'preset' %}" method="post">
   {% csrf_token %}
   <fieldset>
-    <p><label><input type="radio" name="bin_name" value="panoroman_754_img_1803.bin">パノラマ画像１</label></p>
-    <p><label><input type="radio" name="bin_name" value="panoroman_72_img_0485.bin">パノラマ画像２</label></p>
-    <p><label><input type="radio" name="bin_name" value="testcard_60x1280.bin">画面テスト画像</label></p>
+    <p><label><input type="radio" name="png_name" value="panoroman_754_img_1803.png">パノラマ画像１</label><img src="{% static 'panoroman_754_img_1803.png' %}" style="width:400px; height:auto; margin-left:20px;"></p>
+    <p><label><input type="radio" name="png_name" value="panoroman_72_img_0485.png">パノラマ画像２</label><img src="{% static 'panoroman_72_img_0485.png' %}" style="width:400px; height:auto; margin-left:20px;"></p>
+    <p><label><input type="radio" name="png_name" value="testcard_60x1280.png">表示テスト画像</label><img src="{% static 'testcard_60x1280.png' %}" style="width:400px; height:auto; margin-left:20px;"></p>
   </fieldset>
   <p><input type="submit" value="送信"><input type="reset" value="リセット"></p>
 </form>
