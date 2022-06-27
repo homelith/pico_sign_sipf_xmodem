@@ -1,2 +1,4 @@
 settings_extra.py
 settings_sacloud.py
+static/*.png
+static/custom.bin

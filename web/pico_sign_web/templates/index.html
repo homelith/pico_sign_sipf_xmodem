@@ -11,12 +11,17 @@
     <p><label><input type="radio" name="png_name" value="panoroman_72_img_0485.png">パノラマ画像２</label><img src="{% static 'panoroman_72_img_0485.png' %}" style="width:400px; height:auto; margin-left:20px;"></p>
     <p><label><input type="radio" name="png_name" value="testcard_60x1280.png">表示テスト画像</label><img src="{% static 'testcard_60x1280.png' %}" style="width:400px; height:auto; margin-left:20px;"></p>
   </fieldset>
-  <p><input type="submit" value="送信"><input type="reset" value="リセット"></p>
+  <p><input type="submit" value="設定"></p>
 </form>
 <hr>
 <h3>カスタム画像をアップロードする</h3>
 <p>下記フォームから1280x60サイズのPNGファイルを指定してアップロードできます。</p>
 <p>アップロード後、本体の更新ボタンを押すか、数分待つと更新されます。</p>
+<form action="{% url 'custom' %}" method="post" enctype="multipart/form-data">
+  {% csrf_token %}
+  <input type="file" name="png_body"><br>
+  <input type="submit" value="アップロード">
+</form>
 <br>
 {% endblock content %}
 {% block javascript %}

@@ -25,17 +25,9 @@ def index(request):
     context = {}
     return render(request, 'index.html', context)
 
-@login_required
-def preset(request):
-    context = {}
-
-    # check if valid POST parameter exists
-    png_name = request.POST.get("png_name", None)
-    if png_name == None:
-        return render(request, 'error.html', context)
-
+def upload(request, context, png_name):
     ############################################################################
-    # convert PNG to rgb565 bmp
+    # convert PNG to rgb565 BMP
     ############################################################################
     image = Image.open('pico_sign_web/static/' + png_name).transpose(Image.ROTATE_270)
     width, height = image.size
@@ -47,13 +39,11 @@ def preset(request):
 
     bin_name = png_name.rsplit('.', 1)[0] + '.bin'
     bin_fp = open('pico_sign_web/static/' + bin_name, 'wb')
-
     for y in range(height):
         for x in range(width):
             rgb888 = getPixel(x, y)
             rgb565 = ((rgb888[0]>>3)<<11) | ((rgb888[1]>>2)<<5) | (rgb888[2]>>3)
             bin_fp.write(rgb565.to_bytes(2, byteorder = "little"))
-
     bin_fp.close()
 
     ############################################################################
@@ -113,10 +103,43 @@ def preset(request):
 
     # inject result page parameters
     context["bin_name"] = bin_name
-    return render(request, 'preset.html', context)
+    return render(request, 'done.html', context)
+
+
+@login_required
+def preset(request):
+    context = {}
+
+    # POST only
+    if request.method != 'POST':
+        return render(request, 'error.html', context)
+
+    # check if valid POST parameter exists
+    png_name = request.POST.get("png_name", None)
+    if png_name == None:
+        return render(request, 'error.html', context)
+
+    return upload(request, context, png_name)
 
 @login_required
 def custom(request):
     context = {}
-    return render(request, 'custom.html', context)
+
+    # POST only
+    if request.method != 'POST':
+        return render(request, 'error.html', context)
+
+    # check if valid POST multipart upload exists
+    png_body = request.FILES.get('png_body')
+    if png_body == None:
+        return render(request, 'error.html', context)
+
+    # store multipart upload
+    png_name = 'custom.png'
+    png_fp = open('pico_sign_web/static/' + png_name, 'wb')
+    for chunk in png_body.chunks():
+        png_fp.write(chunk)
+    png_fp.close()
+
+    return upload(request, context, png_name)
 
