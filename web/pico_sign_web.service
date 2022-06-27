@@ -1,0 +1,19 @@
+[Unit]
+Description=PicoSignWeb
+Requires=docker.service
+After=docker.service
+
+[Service]
+WorkingDirectory=/opt
+Type=simple
+
+ExecStartPre=-/usr/bin/docker stop pico_sign_web
+ExecStartPre=-/usr/bin/docker rm pico_sign_web
+#ExecStartPre=/usr/bin/docker pull pico_sign_web:latest
+ExecStart=/usr/bin/docker run --rm --name pico_sign_web -p 80:80 pico_sign_web:latest
+ExecStop=-/usr/bin/docker kill pico_sign_web
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+{% if form.errors %}
+<p>入力されたアカウント情報が正しくありません。</p>
+{% endif %}
+
+{% if next %}
+    {% if user.is_authenticated %}
+    <p>現在ログイン中のアカウントではアクセスできません。権限のあるアカウントで再度ログインしてください。</p>
+    {% else %}
+    <p>ログインが必要です。</p>
+    {% endif %}
+{% endif %}
+
+<form method="post" action="{% url 'login' %}">
+{% csrf_token %}
+<table>
+<tr>
+    <td>{{ form.username.label_tag }}</td>
+    <td>{{ form.username }}</td>
+</tr>
+<tr>
+    <td>{{ form.password.label_tag }}</td>
+    <td>{{ form.password }}</td>
+</tr>
+</table>
+
+<input type="submit" value="ログイン">
+<input type="hidden" name="next" value="{{ next }}">
+</form>
+
+{# Assumes you set up the password_reset view in your URLconf #}
+{# <p><a href="{% url 'password_reset' %}">Lost password?</a></p> #}
+
+{% endblock %}
+{% block javascript %}
+{% endblock javascript %}

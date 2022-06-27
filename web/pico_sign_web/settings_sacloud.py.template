@@ -1,0 +1,18 @@
+SAKURACLOUD_ACCESS_TOKEN = ''
+SAKURACLOUD_ACCESS_TOKEN_SECRET = ''
+SAKURACLOUD_COMMONSERVICEITEM_ENDPOINT = ''
+SIPF_WEBHOOK_ENDPOINT = ''
+SIPF_PROJECT_ID = ''
+SIPF_DEVICE_ID = ''
+ALLOWED_HOSTS = []
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django_tidb.tidb',
+        'NAME': 'somedbname',
+        'USER': 'somedbname',
+        'PASSWORD': '',
+        'HOST': 'tidbhost.example.com',
+        'PORT': 3306,
+    }
+}
