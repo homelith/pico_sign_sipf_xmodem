@@ -48,25 +48,25 @@
 #define VREG_VSEL VREG_VOLTAGE_1_20
 #define DVI_TIMING dvi_timing_480x1920p_20hz
 
-#define FRAME_WIDTH   60
-#define FRAME_HEIGHT  240
-#define SCROLL_HEIGHT 1280
-#define SCROLL_TICK   4
+#define FRAME_WIDTH         60
+#define FRAME_HEIGHT        240
+#define SCROLL_HEIGHT       1280
+#define SCROLL_TICK_DEFAULT 4
 
 #define UART0_TX_QUEUE_SIZE 1024
 #define UART1_TX_QUEUE_SIZE 128
 
-#define SIPF_LINEBUF_SIZE 256
-#define SIPF_FILENAME_MAX 64
+#define SIPF_LINEBUF_SIZE   256
+#define SIPF_FILENAME_MAX   64
 
-#define ST_IDLE            0
-#define ST_RX_POLLING      1
-#define ST_XMODEM_REQ_WAIT 2
-#define ST_XMODEM_RECV     3
+#define ST_IDLE             0
+#define ST_RX_POLLING       1
+#define ST_XMODEM_REQ_WAIT  2
+#define ST_XMODEM_RECV      3
 
-#define EOT 0x04
-#define NAK 0x15
-#define ACK 0x06
+#define EOT                 0x04
+#define NAK                 0x15
+#define ACK                 0x06
 
 typedef struct QUEUE_tag{
 	uint8_t *buf;
@@ -189,8 +189,9 @@ int main() {
 
 	// dvi controls
 	uint32_t dvi_update_idx = 0;
-	uint16_t dvi_line_offset = 0;
+	int16_t dvi_line_offset = 0;
 	uint16_t dvi_line_idx = 0;
+	int16_t scroll_tick = SCROLL_TICK_DEFAULT;
 
 	// system global setting
 	vreg_set_voltage(VREG_VSEL);
@@ -370,14 +371,17 @@ int main() {
 					} else if (sipf_rxpoll_line_cnt == 6) {
 						// 7th line may includes first payload of sipf message object
 						// {tag} {type} {length} {payload}
-						// this program only accept variable length UTF-8 string payload (type == 20)
+						// this program accepts variable length UTF-8 string payload (type == 0x20) and int16 (type == 0x03) value
 						sipf_rxpoll_linebuf[SIPF_LINEBUF_SIZE-1] = '\0';
 						uint32_t tmp_type;
 						uint32_t tmp_len;
 						sscanf((const char*)sipf_rxpoll_linebuf, "%*x %lx %lx", &tmp_type, &tmp_len);
 						uint8_t type = (uint8_t)(tmp_type & 0x000000ff);
 						uint8_t len = (uint8_t)(len & 0x000000ff);
+
+						// TODO : this version use '9' magic number offset to detect payload start offset, we should not use them
 						if (type == 0x20) {
+							// accept UTF-8 payload as filename
 							if (len > SIPF_FILENAME_MAX) {
 								len = SIPF_FILENAME_MAX;
 							}
@@ -386,6 +390,11 @@ int main() {
 							for (uint16_t i = 0; i < sipf_filename_len; i ++) {
 								sipf_filename[i] = (char2hex(sipf_rxpoll_linebuf[i*2+9]) << 4) + char2hex(sipf_rxpoll_linebuf[i*2+10]);
 							}
+						} else if (type == 0x03) {
+							// accept int16 value as scroll_tick
+							int32_t tmp_val;
+							sscanf((const char*)(sipf_rxpoll_linebuf+9), "%lx", &tmp_val);
+							scroll_tick = (int16_t)tmp_val;
 						}
 						sipf_rxpoll_line_cnt ++;
 					} else {
@@ -481,9 +490,11 @@ int main() {
 			dvi_line_idx = 0;
 
 			// offset start line index
-			dvi_line_offset += SCROLL_TICK;
+			dvi_line_offset += scroll_tick;
 			if (dvi_line_offset >= SCROLL_HEIGHT) {
 				dvi_line_offset -= SCROLL_HEIGHT;
+			} else if (dvi_line_offset < 0) {
+				dvi_line_offset += SCROLL_HEIGHT;
 			}
 		} else {
 			dvi_line_idx ++;
