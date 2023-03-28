@@ -25,7 +25,7 @@ def index(request):
     context = {}
     return render(request, 'index.html', context)
 
-def upload(request, context, png_name):
+def upload(request, context, png_name, scroll_speed):
     ############################################################################
     # convert PNG to rgb565 BMP
     ############################################################################
@@ -101,8 +101,26 @@ def upload(request, context, png_name):
     }
     result = requests.post(settings.SIPF_WEBHOOK_ENDPOINT, headers=headers_dict, json=json_dict)
 
+    ############################################################################
+    # submit scroll_speed message to mono-PF
+    ############################################################################
+    headers_dict = {'Content-Type' : 'application/json'}
+    json_dict = {
+        'device_id' : settings.SIPF_DEVICE_ID,
+        'type'      : 'object',
+        'payload'   : [
+            {
+                'type'  : 'int16',
+                'tag'   : 'FF',
+                'value' : scroll_speed,
+            }
+        ],
+    }
+    result = requests.post(settings.SIPF_WEBHOOK_ENDPOINT, headers=headers_dict, json=json_dict)
+
     # inject result page parameters
     context["bin_name"] = bin_name
+    context["scroll_speed"] = scroll_speed
     return render(request, 'done.html', context)
 
 
@@ -115,11 +133,24 @@ def preset(request):
         return render(request, 'error.html', context)
 
     # check if valid POST parameter exists
-    png_name = request.POST.get("png_name", None)
-    if png_name == None:
+    param_str = request.POST.get('param_str', None)
+    if param_str == None:
         return render(request, 'error.html', context)
 
-    return upload(request, context, png_name)
+    # parse "{filename}:{scroll}" string into parameters
+    params = param_str.split(':')
+    if len(params) != 2:
+        return render(request, 'error.html', context)
+    if not params[1].isdigit():
+        return render(request, 'error.html', context)
+    png_name = params[0]
+    scroll_speed = int(params[1])
+    if scroll_speed > 32767:
+        scroll_speed = 32767
+    if scroll_speed < -32768:
+        scroll_speed = -32768
+
+    return upload(request, context, png_name, scroll_speed)
 
 @login_required
 def custom(request):
@@ -129,9 +160,14 @@ def custom(request):
     if request.method != 'POST':
         return render(request, 'error.html', context)
 
-    # check if valid POST multipart upload exists
+    # check if valid POST multipart upload + scroll_speed number exists
     png_body = request.FILES.get('png_body')
     if png_body == None:
+        return render(request, 'error.html', context)
+    scroll_speed_str = request.POST.get('scroll_speed')
+    if scroll_speed_str == None:
+        return render(request, 'error.html', context)
+    if not scroll_speed_str.isdigit():
         return render(request, 'error.html', context)
 
     # store multipart upload
@@ -141,5 +177,12 @@ def custom(request):
         png_fp.write(chunk)
     png_fp.close()
 
-    return upload(request, context, png_name)
+    # store scroll_speed number
+    scroll_speed = int(scroll_speed_str)
+    if scroll_speed > 32767:
+        scroll_speed = 32767
+    if scroll_speed < -32768:
+        scroll_speed = -32768
+
+    return upload(request, context, png_name, scroll_speed)
 
