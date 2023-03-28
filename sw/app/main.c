@@ -48,25 +48,32 @@
 #define VREG_VSEL VREG_VOLTAGE_1_20
 #define DVI_TIMING dvi_timing_480x1920p_20hz
 
-#define FRAME_WIDTH         60
-#define FRAME_HEIGHT        240
-#define SCROLL_HEIGHT       1280
-#define SCROLL_TICK_DEFAULT 4
+#define FRAME_WIDTH             60
+#define FRAME_HEIGHT            240
+#define SCROLL_HEIGHT           1280
+#define SCROLL_TICK_DEFAULT     4
 
-#define UART0_TX_QUEUE_SIZE 1024
-#define UART1_TX_QUEUE_SIZE 128
+#define RXPOLL_INIT_MS          10000
+#define RXPOLL_INTERVAL_MS      180000
+#define RXPOLL_NEXT_MS          500
 
-#define SIPF_LINEBUF_SIZE   256
-#define SIPF_FILENAME_MAX   64
+#define XMODEM_TRIGGER_DELAY_MS 2000
 
-#define ST_IDLE             0
-#define ST_RX_POLLING       1
-#define ST_XMODEM_REQ_WAIT  2
-#define ST_XMODEM_RECV      3
+#define UART0_TX_QUEUE_SIZE     1024
+#define UART1_TX_QUEUE_SIZE     128
 
-#define EOT                 0x04
-#define NAK                 0x15
-#define ACK                 0x06
+#define SIPF_LINEBUF_SIZE       256
+#define SIPF_FILENAME_MAX       64
+
+#define ST_IDLE                 0
+#define ST_RX_POLLING           1
+#define ST_XMODEM_REQ_WAIT      2
+#define ST_XMODEM_RECV          3
+
+#define EOT                     0x04
+#define NAK                     0x15
+#define ACK                     0x06
+
 
 typedef struct QUEUE_tag{
 	uint8_t *buf;
@@ -175,7 +182,7 @@ int main() {
 	uint8_t  sipf_filename[SIPF_FILENAME_MAX];
 	uint16_t sipf_filename_len = 0;
 
-	uint64_t sipf_rxpoll_prev_tick = time_us_64();
+	uint64_t sipf_rxpoll_next_tick = time_us_64() + RXPOLL_INIT_MS * 1000;
 
 	uint8_t  sipf_rxpoll_line_cnt;
 	uint8_t  sipf_rxpoll_linebuf[SIPF_LINEBUF_SIZE];
@@ -292,7 +299,7 @@ int main() {
 			queue_puts(&uart0_tx_queue, (uint8_t*)"'\r\n", 256, true);
 			queue_puts(&uart0_tx_queue, (uint8_t*)"timed out, return to initial state.\r\n", 256, true);
 			gpio_put(25, false);
-			sipf_rxpoll_prev_tick = curr_tick;
+			sipf_rxpoll_next_tick = curr_tick + RXPOLL_INTERVAL_MS * 1000;
 			sipf_state_last_event_tick = curr_tick;
 			sipf_state = ST_IDLE;
 		}
@@ -304,7 +311,8 @@ int main() {
 			}
 			// issue "$$RX" command after 180sec or rising edge of switch pressed
 			// then move to ST_RX_POLLING state
-			if (curr_tick - sipf_rxpoll_prev_tick > 180000000 || sw_rise) {
+			int64_t diff_tick = (int64_t)(curr_tick - sipf_rxpoll_next_tick);
+			if (diff_tick > 0 || sw_rise) {
 				queue_puts(&uart0_tx_queue, (uint8_t*)"send $$RX command to sipf\r\n", 256, true);
 				queue_puts(&uart1_tx_queue, (uint8_t*)"$$RX\r\n", 256, true);
 				gpio_put(25, true);
@@ -354,7 +362,7 @@ int main() {
 							queue_puts(&uart1_tx_queue, sipf_filename, sipf_filename_len, false);
 							queue_puts(&uart1_tx_queue, (uint8_t*)"\r\n", 256, true);
 							// state transition
-							sipf_xmodem_trigger_tick = curr_tick + 2000000;
+							sipf_xmodem_trigger_tick = curr_tick + XMODEM_TRIGGER_DELAY_MS * 1000;
 							sipf_state = ST_XMODEM_REQ_WAIT;
 						} else {
 							// if no $$FGET filename available, go to idle
@@ -364,7 +372,7 @@ int main() {
 								queue_puts(&uart0_tx_queue, (uint8_t*)"got response with invalid message\r\n", 256, true);
 							}
 							gpio_put(25, false);
-							sipf_rxpoll_prev_tick = curr_tick;
+							sipf_rxpoll_next_tick = curr_tick + RXPOLL_INTERVAL_MS * 1000;
 							sipf_state = ST_IDLE;
 						}
 						sipf_rxpoll_line_cnt = 0;
@@ -457,7 +465,7 @@ int main() {
 					queue_push(&uart1_tx_queue, ACK);
 					gpio_put(25, false);
 
-					sipf_rxpoll_prev_tick = curr_tick;
+					sipf_rxpoll_next_tick = curr_tick + RXPOLL_NEXT_MS * 1000;
 					sipf_state = ST_IDLE;
 				} else if (3 <= sipf_xmodem_byte_cnt && sipf_xmodem_byte_cnt < 131) {
 					if (dvi_update_idx < 153600) {
