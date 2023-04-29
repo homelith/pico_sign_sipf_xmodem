@@ -189,6 +189,7 @@ int main() {
 	uint16_t sipf_rxpoll_linebuf_idx;
 	uint8_t  sipf_rxpoll_linebuf_accept_newline;
 	bool     sipf_rxpoll_filename_available;
+	bool     sipf_rxpoll_peek_next_msg;
 
 	uint64_t sipf_xmodem_trigger_tick = 0xffffffffffffffffULL;
 	uint16_t sipf_xmodem_block_cnt = 0;
@@ -320,6 +321,7 @@ int main() {
 				sipf_rxpoll_linebuf_idx = 0;
 				sipf_rxpoll_linebuf_accept_newline = 0;
 				sipf_rxpoll_filename_available = false;
+				sipf_rxpoll_peek_next_msg = false;
 				sipf_state = ST_RX_POLLING;
 			}
 			// supress resetting during IDLE state
@@ -372,7 +374,11 @@ int main() {
 								queue_puts(&uart0_tx_queue, (uint8_t*)"got response with invalid message\r\n", 256, true);
 							}
 							gpio_put(25, false);
-							sipf_rxpoll_next_tick = curr_tick + RXPOLL_INTERVAL_MS * 1000;
+							if (sipf_rxpoll_peek_next_msg) {
+								sipf_rxpoll_next_tick = curr_tick + RXPOLL_NEXT_MS * 1000;
+							} else {
+								sipf_rxpoll_next_tick = curr_tick + RXPOLL_INTERVAL_MS * 1000;
+							}
 							sipf_state = ST_IDLE;
 						}
 						sipf_rxpoll_line_cnt = 0;
@@ -398,11 +404,13 @@ int main() {
 							for (uint16_t i = 0; i < sipf_filename_len; i ++) {
 								sipf_filename[i] = (char2hex(sipf_rxpoll_linebuf[i*2+9]) << 4) + char2hex(sipf_rxpoll_linebuf[i*2+10]);
 							}
+							sipf_rxpoll_peek_next_msg = true;
 						} else if (type == 0x03) {
 							// accept int16 value as scroll_tick
 							int32_t tmp_val;
 							sscanf((const char*)(sipf_rxpoll_linebuf+9), "%lx", &tmp_val);
 							scroll_tick = (int16_t)tmp_val;
+							sipf_rxpoll_peek_next_msg = true;
 						}
 						sipf_rxpoll_line_cnt ++;
 					} else {
@@ -464,7 +472,6 @@ int main() {
 					queue_puts(&uart0_tx_queue, (uint8_t*)"send ACK to finish xmodem recv\r\n", 256, true);
 					queue_push(&uart1_tx_queue, ACK);
 					gpio_put(25, false);
-
 					sipf_rxpoll_next_tick = curr_tick + RXPOLL_NEXT_MS * 1000;
 					sipf_state = ST_IDLE;
 				} else if (3 <= sipf_xmodem_byte_cnt && sipf_xmodem_byte_cnt < 131) {
