@@ -1,0 +1,16 @@
+import os
+from pico_sign_web.settings.base import *
+
+DEBUG = False
+ALLOWED_HOSTS = ["localhost"]
+DATABASES = {
+    "default": {
+        "ENGINE": "django_tidb.tidb",
+        "NAME": "somedbname",
+        "USER": "somedbname",
+        "PASSWORD": "",
+        "HOST": "tidbhost.example.com",
+        "PORT": 3306,
+        "ATOMIC_REQUESTS": True,
+    }
+}
