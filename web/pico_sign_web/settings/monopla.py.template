@@ -1,0 +1,6 @@
+SAKURACLOUD_ACCESS_TOKEN = ""
+SAKURACLOUD_ACCESS_TOKEN_SECRET = ""
+SAKURACLOUD_COMMONSERVICEITEM_ENDPOINT = "https://secure.sakura.ad.jp/cloud/zone/is1a/api/cloud/1.1/commonserviceitem"
+SIPF_WEBHOOK_ENDPOINT = "https://incoming.sipf.iot.sakura.ad.jp/v0/{depends_on_your_monopla_project}"
+SIPF_PROJECT_ID = ""
+SIPF_DEVICE_ID = ""

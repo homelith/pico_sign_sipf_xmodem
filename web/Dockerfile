@@ -19,7 +19,7 @@ RUN pipenv install --system
 ADD manage.py /opt/app/
 ADD pico_sign_web/ /opt/app/pico_sign_web/
 
-RUN python manage.py collectstatic --noinput
+RUN python manage.py collectstatic --settings=pico_sign_web.settings.settings_edb --noinput
 RUN ln -s /opt/app/static /var/www/html/static
 ADD docker/nginx.conf /etc/nginx/nginx.conf
 ADD docker/default.conf /etc/nginx/sites-enabled/default
